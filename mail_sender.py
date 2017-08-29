@@ -1,8 +1,11 @@
 # -*- coding: utf-8 -*-
+import sys
 import threading
 import smtplib
 from email.mime.text import MIMEText
 
+
+GREATER_THAN_PY32 = sys.version_info > (3, 2)
 
 class MailSender(object):
     """smtplibの軽いWrapperクラス"""
@@ -41,17 +44,27 @@ class MailSender(object):
     def _send(self, msg, title=None, to=None):
         message = MIMEText(msg)
         message['Subject'] = title if title else ''
-        message['From'] = self.sender if self.sender else self.user
+        message['From'] = self.sender
         if isinstance(to, str):
             to = (to,)
         elif not isinstance(to, (list, tuple)):
             to = ['']
         message['To'] = ', '.join(to)
-        with smtplib.SMTP(self.smtp, self.port) as server:
+        if GREATER_THAN_PY32:
+            with smtplib.SMTP(self.smtp, self.port) as server:
+                if self.tls:
+                    server.starttls()
+                    server.ehlo()
+                if self.user and self.password:
+                    server.login(self.user, self.password)
+                server.send_message(message)
+        else:
+            server = smtplib.SMTP(self.smtp, self.port)
             if self.tls:
                 server.starttls()
                 server.ehlo()
             if self.user and self.password:
                 server.login(self.user, self.password)
-            server.send_message(message)
+            server.sendmail(self.sender, to, message.as_string())
+            server.quit()
 
